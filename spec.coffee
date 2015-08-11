@@ -34,7 +34,7 @@ onceExactly = (spy, args...) ->
     spy.should.have.been.calledOnce
     spy.should.have.been.calledWithExactly(args...)
 
-require('mockdown').testFiles(['README.md'], describe, it, skip: no, globals:
+require('mockdown').testFiles(['README.md'], describe, it, skip: yes, globals:
     require: (arg) -> if arg is 'pipelayer' then Pipelayer else require(arg)
 )
 
