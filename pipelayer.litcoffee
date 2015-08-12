@@ -20,3 +20,21 @@
         pipe: (dest, args...) ->
             getTail(this).pipe(getHead(dest), args...)
             return new @constructor(dest, this)
+
+        Promise = global.Promise
+        streamPromise = (stream) ->
+            stream.pipe(s = require('yieldable-streams').Writable(objectMode: yes))
+            spi = s.spi()
+            Promise ?= require 'promiscuous'
+            return new Promise (resolve, reject) ->
+                output = []
+                spi.read() consume = (e, d) ->
+                    return reject(e) if e
+                    return resolve(output) unless d?
+                    output.push(d)
+                    spi.read() consume
+
+        then: ->
+            p = streamPromise(getTail(this))
+            @then = p.then.bind(p)
+            return p.then(arguments...)

@@ -3,7 +3,6 @@ should = should()
 chai.use require 'sinon-chai'
 
 {spy} = sinon = require 'sinon'
-
 same = sinon.match.same
 
 spy.named = (name, args...) ->
@@ -16,8 +15,14 @@ failSafe = (done, fn) -> ->
     catch e then done(e)
 
 Pipelayer = pipe = require './'
+Promise = global.Promise ? require 'promiscuous'   
+ys = require 'yieldable-streams'
 
-util = require 'util'
+arrayStream = (arr, opts={objectMode: yes}) ->
+    spi = (s = ys.Readable(opts)).spi()
+    spi.write(item) for item in arr
+    spi.end()
+    return s
 
 items = (val) -> Object.keys(val).map (k) -> [k, val[k]]
 
@@ -33,11 +38,6 @@ shouldCallLaterOnce = (done, spy, args...) ->
 onceExactly = (spy, args...) ->
     spy.should.have.been.calledOnce
     spy.should.have.been.calledWithExactly(args...)
-
-
-
-
-
 
 describe "pipelayer(tail, head?)", ->
 
@@ -65,11 +65,11 @@ describe "pipelayer(tail, head?)", ->
             withSpy tail, 'pipe', (t) ->
                 pipe(tail).pipe(arg, opts={})
                 t.should.be.calledOnce
-                t.should.be.calledWithExactly(same(dest), same(opts))
+                onceExactly(t, same(dest), same(opts))
                 pipe(tail).pipe(arg)
                 t.should.be.calledTwice
                 t.should.be.calledWithExactly(same(dest))
-            
+
         describe "calls tail.pipe(dest, opts?)", ->
 
             it "with or without opts, as provided", ->
@@ -95,24 +95,65 @@ describe "pipelayer(tail, head?)", ->
                 pipe.getTail(result).should.equal dest
 
 
-    describe ".then(onSuccess?, onFail?) returns a promise", ->
-        (if global.Promise? then it else it.skip
-        ) "that is a global.Promise"
-        it "that resolves to error if the tail emits an error"
-        it "that resolves to an array when the tail is finished"
+    describe ".then(onSuccess?, onFail?) returns a promise that", ->
+        it "is a "+(if global.Promise? then "global.Promise" else "Promise polyfill"), ->
+            pipe(arrayStream([])).then().should.be.instanceOf Promise
 
+        describe "rejects if the tail emits an error", ->
 
+            errorableStream = (e, done) ->
+                pipe(p = ys.Readable(objectMode: yes, highWaterMark:1)).then(
+                    -> done(new AssertionError("should not complete"))
+                    failSafe done, (err) -> err.should.equal(e); done()
+                )
+                return p.spi()
+                
+            it "before any data", (done) ->                
+                errorableStream(e = new Error, done).end(e)
 
+            it "between/after data", (done) ->
+                s = errorableStream(e = new Error, done)
+                s.write(1) -> s.write(2) -> s.write(3) -> s.end(e)
 
+        describe "when the tail is finished, resolves to an array", ->
+            it "of objects", (done) ->
+                pipe(arrayStream([1,2,3])).then failSafe done, (d) =>
+                    d.should.eql [1,2,3]
+                    done()
 
+            it "of string/buffer data", (done) ->
+                pipe(arrayStream(["one","two","three"], {})).then(
+                    failSafe done, (d) =>
+                        d.should.eql [
+                            Buffer("one"),Buffer("two"),Buffer("three")
+                        ]
+                        done()
+                )
 
+            match = (p, res, done) ->
+                p.then(
+                    failSafe done, (d) -> d.should.eql(res); done()
+                    done
+                )
 
+            dataStream = ->
+                ds = pipe(ys.Readable(objectMode: yes, highWaterMark: 0))
+                ds.pipe(ys.Writable(objectMode:yes))
+                return [ds, pipe.getHead(ds).spi()]
 
+            it "of only data since .then() was called", (done) ->
+                [ds, s] = dataStream()
+                s.write(1) -> s.write(2) ->                
+                    match(ds, [3], done); s.write(3) -> s.end()
 
-
-
-
-
+            it "with all data since .then() was first called", (done) ->
+                [ds, s] = dataStream()
+                ds.then()
+                s.write(1) -> s.write(2) ->                
+                    match(ds, [1, 2, 3], done); s.write(3) -> s.end()
+                
+            
+        
 
 
 
