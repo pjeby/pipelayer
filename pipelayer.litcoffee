@@ -17,4 +17,6 @@
             @_tail = getTail(tail)
             @_head = getHead(head)
 
-
+        pipe: (dest, args...) ->
+            getTail(this).pipe(getHead(dest), args...)
+            return new @constructor(dest, this)

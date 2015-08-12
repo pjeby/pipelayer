@@ -61,18 +61,59 @@ describe "pipelayer(tail, head?)", ->
 
     describe ".pipe(dest, opts?)", ->
 
-        it "calls tail.pipe(dest, opts)"
+        checkOpts = (arg, dest=arg, tail=pipe:->) ->
+            withSpy tail, 'pipe', (t) ->
+                pipe(tail).pipe(arg, opts={})
+                t.should.be.calledOnce
+                t.should.be.calledWithExactly(same(dest), same(opts))
+                pipe(tail).pipe(arg)
+                t.should.be.calledTwice
+                t.should.be.calledWithExactly(same(dest))
+            
+        describe "calls tail.pipe(dest, opts?)", ->
+
+            it "with or without opts, as provided", ->
+                checkOpts({})
+
+            it "using dest's tail if it's a pipelayer", ->
+                checkOpts(pipe({}, dest={}), dest)
+
+
 
         describe "returns a new pipelayer", ->
-            it "of the same class"
-            it "whose head is the original pipelayer's head"
-            it "whose tail is the supplied destination stream"
+
+            it "of the same class", ->
+                class MyPipe extends Pipelayer
+                new MyPipe(pipe: ->).pipe(dest={}).should.be.instanceOf MyPipe
+
+            it "whose head is the original pipelayer's head", ->
+                result = pipe((pipe:->), head={}).pipe(dest={})
+                pipe.getHead(result).should.equal head
+
+            it "whose tail is the supplied destination stream", ->
+                result = pipe((pipe:->), head={}).pipe(dest={})
+                pipe.getTail(result).should.equal dest
+
 
     describe ".then(onSuccess?, onFail?) returns a promise", ->
         (if global.Promise? then it else it.skip
         ) "that is a global.Promise"
         it "that resolves to error if the tail emits an error"
         it "that resolves to an array when the tail is finished"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
