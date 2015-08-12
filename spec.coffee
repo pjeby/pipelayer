@@ -15,7 +15,8 @@ failSafe = (done, fn) -> ->
     catch e then done(e)
 
 Pipelayer = pipe = require './'
-Promise = global.Promise ? require 'promiscuous'   
+havePromise = global.Promise?
+Promise = global.Promise ? require 'promiscuous'
 ys = require 'yieldable-streams'
 
 arrayStream = (arr, opts={objectMode: yes}) ->
@@ -23,8 +24,6 @@ arrayStream = (arr, opts={objectMode: yes}) ->
     spi.write(item) for item in arr
     spi.end()
     return s
-
-items = (val) -> Object.keys(val).map (k) -> [k, val[k]]
 
 withSpy = (ob, name, fn) ->
     s = spy.named name, ob, name
@@ -38,6 +37,7 @@ shouldCallLaterOnce = (done, spy, args...) ->
 onceExactly = (spy, args...) ->
     spy.should.have.been.calledOnce
     spy.should.have.been.calledWithExactly(args...)
+
 
 describe "pipelayer(tail, head?)", ->
 
@@ -95,9 +95,39 @@ describe "pipelayer(tail, head?)", ->
                 pipe.getTail(result).should.equal dest
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     describe ".then(onSuccess?, onFail?) returns a promise that", ->
-        it "is a "+(if global.Promise? then "global.Promise" else "Promise polyfill"), ->
+
+        if havePromise then it "is a global.Promise", ->
             pipe(arrayStream([])).then().should.be.instanceOf Promise
+
+        else it "is a Promise polyfill", ->
+            expect(typeof pipe(arrayStream([])).then().then).to.equal "function"
 
         describe "rejects if the tail emits an error", ->
 
@@ -107,8 +137,8 @@ describe "pipelayer(tail, head?)", ->
                     failSafe done, (err) -> err.should.equal(e); done()
                 )
                 return p.spi()
-                
-            it "before any data", (done) ->                
+
+            it "before any data", (done) ->
                 errorableStream(e = new Error, done).end(e)
 
             it "between/after data", (done) ->
@@ -116,6 +146,7 @@ describe "pipelayer(tail, head?)", ->
                 s.write(1) -> s.write(2) -> s.write(3) -> s.end(e)
 
         describe "when the tail is finished, resolves to an array", ->
+
             it "of objects", (done) ->
                 pipe(arrayStream([1,2,3])).then failSafe done, (d) =>
                     d.should.eql [1,2,3]
@@ -130,6 +161,7 @@ describe "pipelayer(tail, head?)", ->
                         done()
                 )
 
+
             match = (p, res, done) ->
                 p.then(
                     failSafe done, (d) -> d.should.eql(res); done()
@@ -143,17 +175,26 @@ describe "pipelayer(tail, head?)", ->
 
             it "of only data since .then() was called", (done) ->
                 [ds, s] = dataStream()
-                s.write(1) -> s.write(2) ->                
+                s.write(1) -> s.write(2) ->
                     match(ds, [3], done); s.write(3) -> s.end()
 
             it "with all data since .then() was first called", (done) ->
                 [ds, s] = dataStream()
                 ds.then()
-                s.write(1) -> s.write(2) ->                
+                s.write(1) -> s.write(2) ->
                     match(ds, [1, 2, 3], done); s.write(3) -> s.end()
-                
-            
-        
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -218,7 +259,7 @@ describe "pipelayer.withPlugins(ob) returns a pipelayer subclass", ->
         it "that return new this(originalmethod(args...))"
 
 
-describe.skip "README Examples", ->
+describe "README Examples", ->
     require('mockdown').testFiles(['README.md'], describe, it, globals:
         require: (arg) ->
             if arg is 'pipelayer' then Pipelayer else require(arg)

@@ -3,7 +3,10 @@ mocha = require 'gulp-mocha'
 coffee = require 'gulp-coffee'
 
 require 'coffee-script/register'
+
+havePromise = global.Promise?
 require('babel-core/polyfill')
+delete global.Promise unless havePromise
 
 package_name = JSON.parse(require('fs').readFileSync "package.json").name
 main = "#{package_name}.litcoffee"

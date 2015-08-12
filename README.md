@@ -28,7 +28,7 @@ var gulp      = require('gulp'),
         }
     });
 
-gulp.task("default", function() {
+gulp.task("someTask", function() {
   return pipelayer.src(['src/*.coffee'])
     .log("source filename")
     .coffee({bare: true})
@@ -51,7 +51,9 @@ function uglyCoffee(coffeOpts, uglyOpts) {
     return pipelayer.coffee(coffeOpts).uglify(uglyOpts);
 }
 
-var task = pipelayer.src('src/*.coffee').pipe(uglyCoffee()).dest('dist');
+gulp.task('otherTask', function() {
+    return pipelayer.src('src/*.coffee').pipe(uglyCoffee()).dest('dist');
+});
 ```    
 Notice that `uglyCoffee()` returns a *combination* of two streams!  Normally, when you `.pipe()` node streams together, you end up with the *last* stream piped, which means you can't *compose* transform streams ahead of time: you have to assemble everything at once, which makes it hard to build higher-level transforms out of existing ones.
 
