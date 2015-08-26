@@ -1,115 +1,91 @@
 # pipelayer
 
-Sometimes -- especially when working with gulp -- it's helpful to be able to stack a bunch of transform streams together, and use the whole thing as if it were one giant transform stream.
-
-For that matter, sometimes it would be nice to be able to replace verbose pipelines like `foo().pipe(bar()).pipe(baz())` with something like `pipe.foo().bar().baz()`.
-
-Pipelayer lets you do *both*:
+Pipelayer is a tool for "virally" adding plugins to node stream objects, such that they pass on the same plugins to any stream they're `.pipe()`d to, recursively.  This is especially useful for working with gulp, e.g.:
 
 <!-- mockdown-setup: --printResults; languages.js = 'babel' -->
 
 ```js
+// Use plugins without .pipe()
+
 var gulp      = require('gulp'),
     pipelayer = require('pipelayer').withPlugins({
-
-        // Any function that returns a stream can be a plugin
         src: gulp.src,
         dest: gulp.dest,
         coffee: require('gulp-coffee'),
         uglify: require('gulp-uglify'),
-
-        /* Generator functions become yieldable-streams.Transform factories */
-        log: function *(msg) {
-            var file;
-            while ( (file = yield this.read()) != null ) {
-                console.log(msg+": "+file.path);
-                yield this.write(file);
-            }
-        }
     });
 
 gulp.task("someTask", function() {
-  return pipelayer.src(['src/*.coffee'])
-    .log("source filename")
-    .coffee({bare: true})
-    .log("compiled filename")
-    .uglify()
-    .dest('dist');
+  return pipelayer
+    .src(['src/*.coffee'])  // No need to .pipe() between plugins!
+    .coffee({bare: true})   // Each new stream gets extended with
+    .uglify()               // the same set of plugins, but is
+    .dest('dist');          // otherwise the same stream as before.
 });
 ```
 
-Calling `pipelayer(stream)` wraps a stream as a Pipelayer object, with the given plugins.  Pipelayer objects also have a `.then()` method, so they can be used as promises (they'll yield an array of everything that came out of the stream since `.then()` was first called, or an error if the stream emits an error event.
+### Defining Plugins
 
-(That's why the above gulp task can return a Pipelayer: gulp will recognize the `.then` method and wait for the stream to complete before going on to the next task.)
+Pipelayer's `.withPlugins(obj, names?)` static method returns a new, customized version of the `pipelayer` function, with the specified additional plugins found as own-enumerable properties on `obj`.  (Unless an array of `names` is given, in which case only the named properties will be used as plugins.)
+
+The returned function will have the plugins available as static properties on itself, and will augment any streams passed to it with the same plugins.  It will also have a `.withPlugins()` method, that can be used to create extended versions of itself, recursively.
+
+So, we could have made the previous example even simpler, by telling pipelayer what properties to grab from `gulp`, and then using [`auto-plug`](https://npmjs.com/package/auto-plug) to load the gulp plugins, e.g.:
+
+<!--mockdown-set: ++ignore -->
+
+```js
+var gulp      = require('gulp'),
+    pipelayer = require('pipelayer')
+        .withPlugins(gulp, ['src', 'dest'])
+        .withPlugins(require('auto-plug')('gulp'));
+```
+
+The above code will make `src()`, `dest()`, and any modules named `gulp-*` listed in `package.json` available as methods on `pipelayer`, and on any streams it creates or pipes to.
+
+Plugins supplied to `.withPlugins()` can be any Javascript value, but functions are handled specially:
+
+* If it's a generator function, it's turned into a transform stream factory using the [`yieldable-streams`](https://npmjs.com/package/yieldable-streams) module.
+
+* If a function returns a stream, the returned stream is augmented with the same plugins as the current stream or `pipelayer` function.  If the returned stream is writable and the plugin was invoked on a stream, then the returned stream will also be `.pipe()`d to before it's returned.
+
+All other plugin values just become regular properties or methods of the stream (and of the new pipelayer function).
+
 
 ### Composing Pipelines
 
-Pipelayer objects also have a `.pipe()` method that accepts a stream or another Pipelayer, and returns a *new* Pipelayer object with the same plugins.  This lets you compose pipelines, like so:
+Normally, when you `.pipe()` node streams together, you end up with the *last* stream piped, which means you can't *compose* transform streams ahead of time: you have to assemble everything at once, which makes it hard to build higher-level transforms out of existing ones.
+
+But sometimes -- especially when working with gulp -- it's helpful to be able to stack a bunch of transform streams together, and use the whole thing as if it were one giant transform stream.  Pipelayer lets you do that, just by wrapping the first stream in the pipeline, and ending it with an empty `.pipe()` call:
 
 ```js
-function uglyCoffee(coffeOpts, uglyOpts) {
-    return pipelayer.coffee(coffeOpts).uglify(uglyOpts);
-}
+// Compose a pipeline from some transform streams
 
-gulp.task('otherTask', function() {
-    return pipelayer.src('src/*.coffee').pipe(uglyCoffee()).dest('dist');
-});
-```    
-Notice that `uglyCoffee()` returns a *combination* of two streams!  Normally, when you `.pipe()` node streams together, you end up with the *last* stream piped, which means you can't *compose* transform streams ahead of time: you have to assemble everything at once, which makes it hard to build higher-level transforms out of existing ones.
+var pipelayer = require('pipelayer'),
 
-But when you call a Pipelayer's `.pipe()` method (or a plugin), you actually get back *another Pipelayer object*: one that remembers its "head", and handles incoming pipes accordingly.
+    aPipeline = pipelayer(aTransform)   // start the chain w/pipelayer()
+                .pipe(anotherTransform)
+                .pipe(yetAnotherTransform)
+                .pipe();                // and end with empty .pipe()
 
-There is one slight downside to this: you must always *start* a pipeline with a Pipelayer, never a regular node stream.  That's because a Pipelayer *isn't* a node stream: it's just a wrapper over one (or more) node streams.  (You can turn an arbitrary node stream into a Pipelayer, however, by calling `pipelayer(stream)`.)
+// Now we can use the combined stream as if it were one stream all along
+someReadable.pipe(aPipeline).pipe(someWritable)
+```
 
-### How Pipelayers Work
+Pipelayer does this by augmenting its argument's `.pipe()` method to carry forward the original start of the pipeline, so that the final `.pipe()` call can create a combined duplex stream.  Each subsequently-piped stream is augmented in the same way, and the resulting stream will emit errors for any errors emitted by the underlying streams.
 
-Each pipelayer has a head stream (where you pipe *into* it), and a tail stream (that you pipe *out* of).  When a pipelayer is first created, the head and tail streams are usually the same.  But when you use a plugin method or `.pipe()` to another stream, the new stream retains the old head stream, and replaces the tail stream.
+This pipeline composition aspect of Pipelayer is completely orthogonal to the plugin-adding aspect.  If the `pipelayer` function used to start the chain has plugins, then each piped stream and the combined stream will have the same plugins.  If it doesn't have any plugins, then only the `.pipe()` method of the streams will be altered.  And you can use an empty `.pipe()` call to create a combined stream, even if the chain was composed entirely from plugin calls, e.g.:
 
-In this way, you can build up a long pipeline, and yet retain the ability to pipe *into* the result, because the pipeline still knows where to route things into.
+```js
+// Compose a pipeline from plugin calls
 
-If you need to directly access the node stream at a pipelayer's head or tail, you can use `pipelayer.getHead(pipelineOrStream)` or `pipelayer.getTail(pipelineOrStream)`.  These functions will accept either a plain node stream or a pipelayer; if you pass in a node stream, the stream will be returned unchanged.  This is useful for creating APIs that work with pipelayers or streams: you can just call `pipelayer.getHead(arg)` when you're expecting `arg` to be a writable stream to pipe into, or `pipelayer.getTail(arg)` if you're looking for a readable stream to read out of. 
+var uglyCoffee = pipelayer
+                    .coffee({bare: true})
+                    .uglify()
+                    .pipe();    // just end the composition with .pipe()
 
-## Reference
-
-### Constructor: `aPipe = pipelayer(tail, head?)`
-
-Create a new pipelayer instance with the given tail stream (required) and head stream (optional).  If no head is supplied, the tail stream is used as the head.  
-
-Either or both streams can be pipelayers themselves, in which case the tail pipelayer's tail is used as the tail stream, and the head pipelayer's head stream is used as the head stream.
-
-
-### Instance Methods
-
-#### `.pipe(newTail, opts?)`
-
-Pipe the tail stream of this instance into the head of `newTail`, and return a new instance of the same pipelayer subclass, with the same head as the current instance, and a tail equal to the tail of `newTail`.  The `opts`, if provided, are passed to the underlying stream `.pipe()` call before creating the new instance.
-
-#### `.then(onsuccess?, onfail?)`
-
-Return an ES6 promise (or polyfill) for the end of the tail stream, if it's readable.  If not readable, or an error occurs, `onfail()` will be called with the error.  Otherwise, `onsuccess()` will be called with an array containing all the objects or data sent to the tail stream.  Data read from the tail stream *before* the first call to `.then()` will not be included.
-
-
-### Static Methods
-
-#### `pipelayer.isPipelayer(streamOrPipelayer)`
-
-Returns true if the argument is a pipelayer -- even a subclass or a duplicate implementation due to multiple versions of the pacakge being installed.
-
-#### `pipelayer.getHead(streamOrPipelayer)`
-
-If the argument is a pipelayer (including a subclass or duplicate implementation), returns its underlying "head" stream.  Otherwise, the stream is returned unchanged.
-
-#### `pipelayer.getTail(streamOrPipelayer)`
-
-If the argument is a pipelayer (including a subclass or duplicate implementation), returns its underlying "tail" stream.  Otherwise, the stream is returned unchanged.
-
-#### `withPlugins(obj)`
-
-Create and return a new pipelayer subclass with the plugins found as the named, enumerable own-properties of `obj`.  If `obj` has no enumerable properties (as is the case when using [`auto-plug`](https://www.npmjs.com/package/auto-plug) in lazy mode), its non-enumerable own-properties are used instead.
-
-Plugins are installed on the new subclass by creating both static and instance (i.e., prototype) properties.  These properties lazily delegate to the same-named properties on `obj`.
-
-If a plugin is an object, it's simply exposed as a normal property.  If a plugin is a generator function, it's wrapped as a `Transform.factory` using the yieldable-streams package, so that it returns a stream.  If it's any other sort of function, it's assumed to already return a stream, and is wrapped in such a way that calling `aPipe.aPluginMethod(...args)` will be equivalent to `aPipe.pipe(obj.aPluginMethod(...args))`.
-
-Likewise, if `.aPluginMethod()` is called statically on the *class* (e.g. `pipe.aPluginMethod(...args)`), it is wrapped in such a way as to create a new instance of the class, wrapping the returned stream.  (That is, `pipe(obj.aPluginMethod(...args)`.)
+gulp.src("*.coffee")
+    .pipe(uglyCoffee)   // and it's a valid standalone transform stream
+    .dest("dist");      // ...with the original chain's plugins!
+```
 
