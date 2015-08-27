@@ -37,7 +37,7 @@
     "sinon-chai": "^2.5.0"
   },
   "dependencies": {
-    "autocreate": "^1.0.0",
+    "autocreate": "^1.1.0",
     "promiscuous": "^0.6.0",
     "yieldable-streams": "^0.2.0"
   }

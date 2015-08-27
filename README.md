@@ -43,6 +43,8 @@ var gulp      = require('gulp'),
 
 The above code will make `src()`, `dest()`, and any modules named `gulp-*` listed in `package.json` available as methods on `pipelayer`, and on any streams it creates or pipes to.
 
+The plugin values or methods are "late bound", meaning that they aren't actually retrieved from the supplied `obj` until the first time they're actually used.  (This is especially handy when using `auto-plug`, which by default returns an object whose properties will lazily `require()` a relevant plugin module.)
+
 Plugins supplied to `.withPlugins()` can be any Javascript value, but functions are handled specially:
 
 * If it's a generator function, it's turned into a transform stream factory using the [`yieldable-streams`](https://npmjs.com/package/yieldable-streams) module.
