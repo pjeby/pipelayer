@@ -75,8 +75,8 @@ describe "pipelayer(stream)", ->
     describe ".pipe()", ->
 
         it "returns a yieldable-streams pipeline()"
-
-        it "augmented with any plugins"
+        it "without any plugins"
+        it "returns the same stream if repeated"
 
 
 
