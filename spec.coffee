@@ -80,6 +80,18 @@ describe "pipelayer(stream)", ->
 
 
 
+describe "pipelayer.pipe(stream)", ->
+
+    it "returns augmented stream", ->
+        withSpy pipe::, 'augment', (a) ->
+            res = pipe.pipe(s=ys.Duplex())
+            res.should.equal s
+            a.should.be.calledOn(same pipe::)
+            a.should.be.calledOnce
+            a.should.be.calledWithExactly(same(s))
+            a.should.have.returned same(res)
+
+
 describe "pipelayer.withPlugins(ob) returns a pipelayer subclass", ->
 
     it "with __proto__-based inheritance", ->
@@ -109,18 +121,6 @@ describe "pipelayer.withPlugins(ob) returns a pipelayer subclass", ->
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 describe "Internals", ->
 
     describe "::augment(stream, heads=[])", ->
@@ -136,16 +136,14 @@ describe "Internals", ->
 
     describe "::definePlugins(obj, names?)", ->
 
-        it "copies the named props to ::plugins, wrapped w/::pluginWrapper", ->
+        it "copies the named props to ::plugins, wrapped w/::wrapPlugin", ->
             wp = pipe.withPlugins({})
             withSpy wp::, 'copyProps', (cp) ->
-                withSpy wp::, 'pluginWrapper', (pw) ->
-                    wp::definePlugins(obj={}, names=[])
-                    pw.should.be.calledOnce
-                    cp.should.be.calledWithExactly(
-                        wp::plugins, same(obj), same(names), yes,
-                        pw.returnValues[0]
-                    )
+                wp::definePlugins(obj={}, names=[])
+                cp.should.be.calledWithExactly(
+                    wp::plugins, same(obj), same(names), yes, wp::
+                )
+
         it "adds static properties for named ::plugins", ->
             wp = pipe.withPlugins({})
             withSpy wp::, 'copyProps', (cp) ->
@@ -162,18 +160,91 @@ describe "Internals", ->
 
 
 
-    describe "::pluginWrapper() -> (ctx, name, plugin) ->", ->
+
+
+    describe "::wrapPlugin(plugin)", ->
 
         it "returns plugin if a non-function", ->
-            res = pipe::pluginWrapper()(null, null, 42)
+            res = pipe::wrapPlugin(42)
             expect(res).to.equal 42
 
         describe "returns a function", ->
-            it "w/__proto__ of plugin"
-            it "that passes through arguments and this"
+
+            it "w/__proto__ of plugin", ->
+                res = pipe::wrapPlugin(f = ->)
+                expect(typeof res).to.equal "function"
+                expect(res.__proto__).to.equal f
+
+            it "that passes through arguments and this", ->
+                res = pipe::wrapPlugin(f = spy.named('f', -> 4))
+                res.call(o={}, 1, 2, 3)
+                f.should.be.calledOnce
+                f.should.be.calledOn same(o)
+                f.should.be.calledWithExactly 1, 2, 3
+
+            it "that returns its result unaltered if it's not a stream", ->
+                withSpy pipe::, "augment", (a) ->
+                    res = pipe::wrapPlugin(-> 42)
+                    expect(res()).to.equal 42
+
+                    ob = {on:(->), end:->}
+                    ctx = pipe: spy ->
+                    res = pipe::wrapPlugin(-> ob)
+                    expect(res.call(ctx)).to.equal ob
+
+                    ctx.pipe.should.not.be.called
+                    a.should.not.be.called
 
 
-    describe "::copyProps(dest, src, names, overwrite, wrap)", ->
+
+
+
+
+
+
+
+            it "that pipes to a returned writable stream", ->
+                withSpy pipe, "pipe", (p) ->
+                    withSpy pipe::, "augment", (a) ->
+                        f = ->
+                        ob = {on:f, write:f, end:f, writable:yes}
+                        res = pipe::wrapPlugin(-> ob)
+                        expect(res.call(pipe)).to.equal ob
+
+                        p.should.be.calledWithExactly same(ob)
+                        a.should.be.calledWithExactly same(ob)
+
+            it "that augments a returned readable (but not writable) stream", ->
+                withSpy pipe, "pipe", (p) ->
+                    withSpy pipe::, "augment", (a) ->
+                        f = ->
+                        ob = {on:f, write:f, end:f, writable:no}
+                        res = pipe::wrapPlugin(-> ob)
+                        expect(res.call(pipe)).to.equal ob
+                        p.should.not.be.called
+                        a.should.be.calledWithExactly same(ob)
+
+                        ob = {on:f, pipe:f}
+                        expect(res.call(pipe)).to.equal ob
+                        p.should.not.be.called
+                        a.should.be.calledWithExactly same(ob)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    describe "::copyProps(dest, src, names, overwrite, layer)", ->
 
         it "returns dest", ->
             res = pipe::copyProps(d={}, s={}, n=[])
@@ -188,10 +259,21 @@ describe "Internals", ->
             it "that can be assigned to"
             it "that can be reconfigured"
 
+            describe "that, when a layer is given, invoke layer::wrapPlugin()", ->
+                it "at most once, with caching"
+                it "unless overwritten"
+                it "unless reconfigured"
+
             describe "that, even if inherited,", ->
                 it "fetch only once when a wrapper is given"
                 it "no longer delegate when assigned to"
                 it "no longer delegate when reconfigured"
+
+
+
+
+
+
 
 
 

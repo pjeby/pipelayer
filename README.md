@@ -47,9 +47,9 @@ The plugin values or methods are "late bound", meaning that they aren't actually
 
 Plugins supplied to `.withPlugins()` can be any Javascript value, but functions are handled specially:
 
-* If it's a generator function, it's turned into a transform stream factory using the [`yieldable-streams`](https://npmjs.com/package/yieldable-streams) module.
+* If a plugin function returns a stream, the returned stream is augmented with the same plugins as the current stream or `pipelayer` function.
 
-* If a function returns a stream, the returned stream is augmented with the same plugins as the current stream or `pipelayer` function.  If the returned stream is writable and the plugin was invoked on a stream, then the returned stream will also be `.pipe()`d to before it's returned.
+* If the returned stream is writable and the plugin was invoked on a stream, then the returned stream will also be `.pipe()`d to before it's returned.
 
 All other plugin values just become regular properties or methods of the stream (and of the new pipelayer function).
 
