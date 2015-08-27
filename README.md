@@ -26,9 +26,9 @@ gulp.task("someTask", function() {
 
 ### Defining Plugins
 
-Pipelayer's `.withPlugins(obj, names?)` static method returns a new, customized version of the `pipelayer` function, with the specified additional plugins found as own-enumerable properties on `obj`.  (Unless an array of `names` is given, in which case only the named properties will be used as plugins.)
+Pipelayer's `.withPlugins(obj, names?)` static method returns a new, customized version of the `pipelayer` function, with the specified additional plugins found as own-enumerable properties on `obj`.  (Unless an array of `names` is given, in which case the named properties will be used as plugins, regardless of whether they are own-properties or enumerable.)
 
-The returned function will have the plugins available as static properties on itself, and will augment any streams passed to it with the same plugins.  It will also have a `.withPlugins()` method, that can be used to create extended versions of itself, recursively.
+The returned function will have the named properties or methods of `obj` available as static properties on itself, and will augment any streams passed to it with the same plugins.  It will also have a `.withPlugins()` method, that can be used to create extended versions of itself, recursively.
 
 So, we could have made the previous example even simpler, by telling pipelayer what properties to grab from `gulp`, and then using [`auto-plug`](https://npmjs.com/package/auto-plug) to load the gulp plugins, e.g.:
 
@@ -43,15 +43,15 @@ var gulp      = require('gulp'),
 
 The above code will make `src()`, `dest()`, and any modules named `gulp-*` listed in `package.json` available as methods on `pipelayer`, and on any streams it creates or pipes to.
 
-The plugin values or methods are "late bound", meaning that they aren't actually retrieved from the supplied `obj` until the first time they're actually used.  (This is especially handy when using `auto-plug`, which by default returns an object whose properties will lazily `require()` a relevant plugin module.)
+Plugins are "late bound", meaning that the added properties or methods aren't retrieved from `obj` until the first time they're actually used.  (This is especially handy when using `auto-plug`, which by default returns an object whose properties will lazily `require()` a relevant plugin module.)
 
-Plugins supplied to `.withPlugins()` can be any Javascript value, but functions are handled specially:
+The values of `obj`'s named properties can be any Javascript value, but methods are handled specially:
 
-* If a plugin function returns a stream, the returned stream is augmented with the same plugins as the current stream or `pipelayer` function.
+* If a plugin method returns a stream, the returned stream is augmented with the same plugins as the current stream or `pipelayer` function.
 
-* If the returned stream is writable and the plugin was invoked on a stream, then the returned stream will also be `.pipe()`d to before it's returned.
+* If the returned stream is writable and the plugin was invoked on a stream, then the returned stream will be `.pipe()`d to before it's augmented and returned.
 
-All other plugin values just become regular properties or methods of the stream (and of the new pipelayer function).
+All other values just become regular properties or methods of the stream (and of the new pipelayer function).
 
 
 ### Composing Pipelines
