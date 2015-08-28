@@ -125,13 +125,90 @@ describe "Internals", ->
 
     describe "::augment(stream, heads=[])", ->
 
-        it "doesn't add .pipe() to an object without one"
-        it "adds plugins from ::plugins"
+        it "doesn't add .pipe() to an object without one", ->
+            wp = pipe.withPlugins({})
+            wp::augment(s={}).should.equal s
+            s.should.not.have.property 'pipe'
+
+        it "adds plugins from ::plugins", ->
+            wp = pipe.withPlugins({})
+            withSpy wp::, "copyProps", (cp) ->
+                wp::augment(s={}).should.equal s
+                cp.should.be.calledWithExactly same(s), wp::plugins
 
         describe "wraps .pipe()", ->
-            it "to pass through original arguments"
-            it "to augment returned streams (with extended heads)"
-            it "to create a pipeline if no destination"
+            it "to augment original .pipe() return value w/new head", ->
+                res = {}
+                ob = pipe: oldPipe = spy (dest) -> res
+                wp = pipe.withPlugins({})
+                wp::augment(ob).should.equal ob
+                ob.pipe.should.not.equal oldPipe
+                withSpy wp::, "augment", (a) ->
+                    ob.pipe(otherOb = ys.Writable()).should.equal res
+                    oldPipe.should.be.calledOn(ob)
+                    oldPipe.should.be.calledWithExactly same otherOb
+                    a.should.be.calledWithExactly same(res), [ob]
+
+            it "to chain pipeline heads, recursively", ->
+                p = pipe(s1=ys.Readable()).pipe(s2=ys.Duplex()).pipe(s3=ys.Duplex())
+                p.should.equal(s3)
+                withSpy pipe::, "augment", (a) ->
+                    p.pipe(s4=ys.Writable())
+                    a.should.be.calledWithExactly same(s4), [s1, s2, s3]
+                    a.should.have.returned same(s4)
+
+
+
+
+
+
+            describe "so that with no destination, it returns (unaugmented)", ->
+
+                it "a plain duplex stream (w/idempotent .pipe()) for a single step", ->
+                    wp = pipe.withPlugins({})
+                    withSpy ys, 'pipeline', (pl) ->
+                        withSpy ys, 'duplexify', (d) ->
+                            s2 = wp(s1=ys.Writable()).pipe()
+                            pl.should.not.be.called
+                            d.should.be.calledWithExactly same(s1), same(s1)
+                            d.should.have.returned same(s2)
+                            s2.pipe().should.equal s2
+                            s2.pipe().pipe().should.equal s2
+
+                it "a pipeline (w/idempotent .pipe()) for multiple steps", ->
+                    wp = pipe.withPlugins({})
+                    wp(s1=ys.Readable()).pipe(s2=ys.Writable())
+                    withSpy ys, 'pipeline', (pl) ->
+                        s3 = s2.pipe()
+                        pl.should.be.calledWithExactly(
+                            [same(s1), same(s2)], noPipe: yes
+                        )
+                        pl.should.have.returned same(s3)
+                        s3.pipe().should.equal s3
+                        s3.pipe().pipe().should.equal s3
+
+                it "the original stream for a plain pipelayer w/no heads", ->
+                    s2 = pipe(s1=ys.Writable()).pipe()
+                    s2.should.equal s1
+                    oldPipe = s2.pipe
+                    s3 = s2.pipe()
+                    s3.should.equal s2
+                    s3.pipe.should.equal oldPipe
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     describe "::definePlugins(obj, names?)", ->
@@ -155,6 +232,19 @@ describe "Internals", ->
             withSpy wp::, 'copyProps', (cp) ->
                 wp::definePlugins(obj={x:1, z:2})
                 cp.should.be.calledWithExactly(wp, wp::plugins, ['x', 'z'])
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -265,7 +355,7 @@ describe "Internals", ->
                 it "unless reconfigured"
 
             describe "that, even if inherited,", ->
-                it "fetch only once when a wrapper is given"
+                it "fetches only once when a layer is given"
                 it "no longer delegate when assigned to"
                 it "no longer delegate when reconfigured"
 

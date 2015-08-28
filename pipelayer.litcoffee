@@ -1,17 +1,15 @@
 # pipelayer
 
     autocreate = require('autocreate')
+    ys = require('yieldable-streams')
 
     module.exports = class pipelayer
 
         pipelayer = autocreate(this)
-
         constructor: -> throw new TypeError "Not a constructor"
-
         __class_call__: (stream) -> @augment(stream)
 
         @pipe: (stream) -> @::augment(stream)
-
         @withPlugins: -> @::subclass()::definePlugins(arguments...)
 
         plugins: Object.create(null)
@@ -25,7 +23,50 @@
             @copyProps(@plugins, obj, names, yes, this)
             return @copyProps(@constructor, @plugins, names)
 
-        augment: (stream) -> stream
+        augment: (stream, heads) ->
+            @copyProps(@hookPipe(stream, heads), @plugins)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### .pipe() Augmentation and Chaining
+
+        hookPipe: (stream, heads=[]) ->
+            return stream unless isFunction(oldPipe = stream?.pipe)
+
+            stream.pipe = (dest, opts) =>
+
+                streams = heads.concat([stream])
+
+                if dest?
+                    # Standard pipe, augment it and track the heads
+                    return @augment(oldPipe.apply(stream, arguments), streams)
+
+                else if not heads.length and this is pipelayer::
+                    # Somebody called .pipe().pipe()
+                    return stream
+
+                # Create a pipeline or duplex stream, w/plain augmented .pipe()
+                else return pipelayer::hookPipe(
+                    if streams.length > 1
+                        ys.pipeline(streams, noPipe: yes)
+                    else ys.duplexify(stream, stream)
+                )
+
+            return stream
+
+
+### Property Copying
 
         copyProps: (dest) -> dest
 
@@ -74,8 +115,8 @@ method, and either a `pipe()` method or both a `write()` and an `end()` method.
         )
 
         isEmitter = (ob) -> ob? and isFunction(ob.on)
-        isWritableType = (ob) -> isFunction(ob?.write) and isFunction(ob?.end)
-        isReadableType = (ob) -> isFunction(ob?.pipe)
+        isWritableType = (ob) -> isFunction(ob.write) and isFunction(ob.end)
+        isReadableType = (ob) -> isFunction(ob.pipe)
 
 
 
