@@ -19,8 +19,8 @@ gulp.task("someTask", function() {
   return pipelayer
     .src(['src/*.coffee'])  // No need to .pipe() between plugins!
     .coffee({bare: true})   // Each new stream gets extended with
-    .uglify()               // the same set of plugins, but is
-    .dest('dist');          // otherwise the same stream as before.
+    .uglify()               // all of the same plugins as the last,
+    .dest('dist');          // but is otherwise a normal stream.
 });
 ```
 
