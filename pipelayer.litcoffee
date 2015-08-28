@@ -66,9 +66,50 @@
             return stream
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### Property Copying
 
-        copyProps: (dest) -> dest
+        enumerable = configurable = writable = yes
+
+        copyProps: (dest, src, names, overwrite) ->
+            copy = (name) ->
+                return unless overwrite or name not of dest
+                Object.defineProperty dest, name, {
+                    enumerable, configurable,
+                    get: -> src[name],
+                    set: (value) -> Object.defineProperty(
+                        this, name, {configurable, enumerable, writable, value}
+                    )
+                }
+            if names then names.forEach(copy)
+            else for name of src then copy(name)
+            return dest
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

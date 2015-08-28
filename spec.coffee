@@ -203,14 +203,6 @@ describe "Internals", ->
 
 
 
-
-
-
-
-
-
-
-
     describe "::definePlugins(obj, names?)", ->
 
         it "copies the named props to ::plugins, wrapped w/::wrapPlugin", ->
@@ -341,13 +333,57 @@ describe "Internals", ->
             expect(res).to.equal d
 
         describe "creates properties", ->
-            it "enumerable on dest for named props on src"
-            it "skipping already-existing props"
-            it "overwriting existing props if `overwrite`"
-            it "including all enumerable props of src by default"
-            it "that delegate to src"
-            it "that can be assigned to"
-            it "that can be reconfigured"
+
+            it "enumerable on dest for named props on src", ->
+                pipe::copyProps(d={},s={x:1,y:2}, n=['x','z'])
+                Object.keys(d).should.eql n
+                d.should.eql {x:1, z:undefined}
+
+            it "skipping already-existing props", ->
+                pipe::copyProps(d={y:3},s={x:1,y:2}, n=['x','y'])
+                Object.keys(d).should.eql ['y', 'x']
+                d.should.eql {x:1, y:3}
+
+            it "overwriting existing props if `overwrite`", ->
+                pipe::copyProps(d={y:3},s={x:1,y:2}, n=['x','y'], yes)
+                Object.keys(d).should.eql ['y', 'x']
+                d.should.eql {x:1, y:2}
+
+            it "including all enumerable props of src by default", ->
+                s1 = Object.create(null); s1.a = 'b'
+                s2 = Object.create(s1); s2.b = 'c'
+                pipe::copyProps(d={}, s2)
+                d.should.eql {a:'b', b:'c'}
+                
+            it "that delegate to src", ->
+                pipe::copyProps(d={},s={x:1,y:2}, n=['y','x'])
+                Object.keys(d).should.eql n
+                s.x = 99; d.should.eql {x:99, y:2}
+                s.y = 42; d.should.eql {x:99, y:42}
+                s.x = 17; d.should.eql {x:17, y:42}
+                
+
+
+
+
+
+            it "that can be assigned to", ->
+                pipe::copyProps(d={},s={x:1,y:2}, n=['y','x'])
+                d.x = 42
+                d.should.eql {x:42, y:2}
+                Object.keys(d).should.eql ['y', 'x']
+                Object.getOwnPropertyDescriptor(d, 'x').should.eql {
+                    value: 42, enumerable: yes, configurable: yes, writable: yes
+                }
+                delete d.x; d.should.eql {y:2}
+                Object.keys(d).should.eql ['y']
+
+            it "that can be reconfigured", ->
+                pipe::copyProps(d={},s={x:1,y:2}, n=['y','x'])
+                p = Object.getOwnPropertyDescriptor(d, 'y')
+                p.should.eql {
+                    set: p.set, get: p.get, configurable: yes, enumerable: yes
+                }
 
             describe "that, when a layer is given, invoke layer::wrapPlugin()", ->
                 it "at most once, with caching"
@@ -355,12 +391,9 @@ describe "Internals", ->
                 it "unless reconfigured"
 
             describe "that, even if inherited,", ->
-                it "fetches only once when a layer is given"
+                it "fetches only once, if a layer is given"
                 it "no longer delegate when assigned to"
                 it "no longer delegate when reconfigured"
-
-
-
 
 
 
