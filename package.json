@@ -19,7 +19,8 @@
     "ES6",
     "generators",
     "pipes",
-    "pipelines"
+    "pipelines",
+    "plugins"
   ],
   "author": "PJ Eby <pje@telecommunity.com>",
   "license": "ISC",
@@ -38,7 +39,6 @@
   },
   "dependencies": {
     "autocreate": "^1.1.0",
-    "promiscuous": "^0.6.0",
-    "yieldable-streams": "^0.2.0"
+    "yieldable-streams": "^0.3.0"
   }
 }
