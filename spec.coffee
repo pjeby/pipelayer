@@ -69,15 +69,33 @@ describe "pipelayer(stream)", ->
             it "with or without opts, as provided", ->
                 checkOpts({})
 
-            it "augmented with any plugins"
+            it "augmented with any plugins", ->
+                s = pipe.withPlugins(
+                    s: ys.Readable, t: ys.Transform, d: ys.Writable
+                ).s(); s.should.be.instanceof ys.Readable
+                t = s.t(); t.should.be.instanceOf ys.Transform
+                d = t.d(); d.should.be.instanceOf ys.Writable
+
+
+
 
 
     describe ".pipe()", ->
 
-        it "returns a yieldable-streams pipeline()"
-        it "without any plugins"
-        it "returns the same stream if repeated"
+        beforeEach ->
+            @p = pipe.withPlugins(s: ys.Readable, d: ys.Writable).s().d().pipe()
 
+        it "returns a yieldable-streams pipeline()", ->
+            @p.should.be.instanceOf ys.Duplex
+
+        it "without any plugins", ->
+            expect(@p.s).to.not.exist
+            expect(@p.d).to.not.exist
+
+        it "returns the same stream if repeated", ->
+            expect(@p.pipe()).to.equal @p
+            expect(@p.s).to.not.exist
+            expect(@p.d).to.not.exist
 
 
 describe "pipelayer.pipe(stream)", ->
@@ -90,6 +108,17 @@ describe "pipelayer.pipe(stream)", ->
             a.should.be.calledOnce
             a.should.be.calledWithExactly(same(s))
             a.should.have.returned same(res)
+
+
+
+
+
+
+
+
+
+
+
 
 
 describe "pipelayer.withPlugins(ob) returns a pipelayer subclass", ->
@@ -117,6 +146,18 @@ describe "pipelayer.withPlugins(ob) returns a pipelayer subclass", ->
             a.should.be.calledOn(same wp::)
             a.should.be.calledWithExactly(same(s))
             a.should.have.returned same(res)
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
