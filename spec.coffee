@@ -17,12 +17,6 @@ failSafe = (done, fn) -> ->
 Pipelayer = pipe = require './'
 ys = require 'yieldable-streams'
 
-arrayStream = (arr, opts={objectMode: yes}) ->
-    spi = (s = ys.Readable(opts)).spi()
-    spi.write(item) for item in arr
-    spi.end()
-    return s
-
 withSpy = (ob, name, fn) ->
     s = spy.named name, ob, name
     try fn(s) finally s.restore()
@@ -35,6 +29,12 @@ shouldCallLaterOnce = (done, spy, args...) ->
 onceExactly = (spy, args...) ->
     spy.should.have.been.calledOnce
     spy.should.have.been.calledWithExactly(args...)
+
+
+
+
+
+
 
 
 
@@ -266,9 +266,9 @@ describe "Internals", ->
                 wp::definePlugins(obj={x:1, z:2})
                 cp.should.be.calledWithExactly(wp, wp::plugins, ['x', 'z'])
 
-
-
-
+        it "doesn't allow modifying the pipelayer base", ->
+            checkTE (-> pipe::definePlugins({})), "can't modify base"
+            expect(Object.isFrozen(pipe::plugins)).to.be.true
 
 
 

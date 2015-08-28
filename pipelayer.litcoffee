@@ -19,9 +19,9 @@ prototype `augment()` method, which is where all the real action takes place.
 
 Plugins are kept as an object on the prototype; the plugins of each "subclass"
 inherit from the parent class's plugins.  Subclasses are `__proto__`-based,
-using `autocreate`.
+using `autocreate`, and only subclasses can have any actual plugins.
 
-        plugins: Object.create(null)
+        plugins: Object.freeze Object.create(null)  # abstract base
 
         @withPlugins: -> @::subclass()::definePlugins(arguments...)
 
@@ -35,9 +35,9 @@ the original plugin source, cached on `plugins`, and also delegated to by
 static properties on the "constructor".
 
         definePlugins: (obj, names=Object.keys(obj)) ->
+            throw new TypeError "can't modify base" if this is pipelayer::
             @copyProps(@plugins, obj, names, yes, this)
             return @copyProps(@constructor, @plugins, names)
-
 
 ### Augmentation and .pipe() Chaining
 

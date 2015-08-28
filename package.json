@@ -1,6 +1,6 @@
 {
   "name": "pipelayer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Fluently compose pipelines using arbitrary plugins",
   "repository": "git@github.com:pjeby/pipelayer.git",
   "homepage": "https://github.com/pjeby/pipelayer",
