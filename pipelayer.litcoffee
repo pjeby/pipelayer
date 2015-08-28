@@ -84,12 +84,14 @@
 
         enumerable = configurable = writable = yes
 
-        copyProps: (dest, src, names, overwrite) ->
+        copyProps: (dest, src, names, overwrite, layer) ->
             copy = (name) ->
                 return unless overwrite or name not of dest
                 Object.defineProperty dest, name, {
                     enumerable, configurable,
-                    get: -> src[name],
+                    get: if layer
+                              -> dest[name] = layer.wrapPlugin(src[name])
+                         else -> src[name],
                     set: (value) -> Object.defineProperty(
                         this, name, {configurable, enumerable, writable, value}
                     )

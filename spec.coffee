@@ -354,14 +354,14 @@ describe "Internals", ->
                 s2 = Object.create(s1); s2.b = 'c'
                 pipe::copyProps(d={}, s2)
                 d.should.eql {a:'b', b:'c'}
-                
+
             it "that delegate to src", ->
                 pipe::copyProps(d={},s={x:1,y:2}, n=['y','x'])
                 Object.keys(d).should.eql n
                 s.x = 99; d.should.eql {x:99, y:2}
                 s.y = 42; d.should.eql {x:99, y:42}
                 s.x = 17; d.should.eql {x:17, y:42}
-                
+
 
 
 
@@ -386,25 +386,50 @@ describe "Internals", ->
                 }
 
             describe "that, when a layer is given, invoke layer::wrapPlugin()", ->
-                it "at most once, with caching"
-                it "unless overwritten"
-                it "unless reconfigured"
+
+                it "at most once, with caching", ->
+                    withSpy pipe::, "wrapPlugin", (wp) ->
+                        pipe::copyProps(d={},s={x:->}, n=['x'], no, pipe::)
+                        wp.should.not.be.called
+                        x = d.x
+                        wp.should.be.calledOnce
+                        wp.should.be.calledOn(pipe::)
+                        wp.should.be.calledWithExactly(s.x)
+                        wp.should.have.returned x
+                        xx = d.x
+                        wp.should.be.calledOnce
+                        expect(xx).to.equal x
+
+                it "unless overwritten or reconfigured", ->
+                    withSpy pipe::, "wrapPlugin", (wp) ->
+                        pipe::copyProps(d={},s={x:->}, n=['x'], no, pipe::)
+                        d.x = ->
+                        x = d.x
+                        wp.should.not.be.called
+
 
             describe "that, even if inherited,", ->
-                it "fetches only once, if a layer is given"
-                it "no longer delegate when assigned to"
-                it "no longer delegate when reconfigured"
 
+                it "fetches only once, if a layer is given", ->
+                    withSpy pipe::, "wrapPlugin", (wp) ->
+                        pipe::copyProps(d={},s={x:->}, n=['x'], no, pipe::)
+                        dd = Object.create(d)
+                        x1 = dd.x
+                        x2 = d.x
+                        x1.should.equal x2
+                        expect(dd.hasOwnProperty('x')).to.be.false
+                        wp.should.be.calledOnce
 
-
-
-
-
-
-
-
-
-
+                it "no longer delegate when overwritten or reconfigured", ->
+                    withSpy pipe::, "wrapPlugin", (wp) ->
+                        pipe::copyProps(d={},s={x:->}, n=['x'], no, pipe::)
+                        dd = Object.create(d)
+                        d.x = 42
+                        x1 = dd.x
+                        x2 = d.x
+                        expect(x1).to.equal x2
+                        expect(dd.hasOwnProperty('x')).to.be.false
+                        wp.should.not.be.called
 
 
 
@@ -413,31 +438,6 @@ describe "README Examples", ->
         require: (arg) ->
             if arg is 'pipelayer' then Pipelayer else require(arg)
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
